@@ -3,7 +3,7 @@ import io
 import os
 from typing import List, Tuple
 from flask import Flask, request, jsonify, send_file
-from ..processer import Processer, SaverLikeIkasTemplate
+from ..core.processer import Processer, SaverLikeIkasTemplate
 from ..structers.product import Suppliers, PreState
 
 # Flask uygulaması oluştur
