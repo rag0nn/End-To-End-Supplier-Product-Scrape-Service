@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 from .structers.product import Product, Suppliers, PreState
 import logging
+import os
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -20,7 +21,7 @@ class Processer:
     def __init__(self):
         self.product_scraper = None
     
-    def get_with_code(self,supplier:Suppliers,*prestates:List[PreState])->dict:
+    def get_with_code(self,supplier:Suppliers,*prestates:List[PreState])->tuple:
         if supplier == Suppliers.BALGUNES:
             self.product_scraper = BalgunesProductScraper()
         else:
@@ -71,8 +72,14 @@ class Processer:
             
 class SaverLikeIkasTemplate:
     
-    def __init__(self,template_path:str):
-        self.template_path = template_path
+    def __init__(self,template_path:str = None):
+        if template_path is None:
+            self.template_path = os.path.dirname(__file__) + r"\template\ikas-urunler.xlsx"
+        else: 
+            self.template_path = template_path
+            
+            logging.info(f"Output template path: {self.template_path}")
+            print(f"Output template path: {self.template_path}")
         self.template_frame = self._get_template()
         self.column_remap = self._get_column_remap()
         
@@ -80,7 +87,7 @@ class SaverLikeIkasTemplate:
         try:
             frame = pd.read_excel(self.template_path)
         except Exception as e:
-            logging.error(f"{e}")
+            logging.error(f"{e} /n Template Okunamadı")
         return frame
     
     def _get_column_remap(self):

@@ -3,8 +3,8 @@ import io
 import os
 from typing import List, Tuple
 from flask import Flask, request, jsonify, send_file
-from ..core.processer import Processer, SaverLikeIkasTemplate
-from ..structers.product import Suppliers, PreState
+from supplier_scrape_core.processer import Processer, SaverLikeIkasTemplate
+from supplier_scrape_core.structers.product import Suppliers, PreState
 
 # Flask uygulaması oluştur
 app = Flask(__name__)
@@ -138,7 +138,7 @@ def process_products():
         logger.info(f"Başarılı: {len(products)}, Başarısız: {len(failed_products)}")
         
         # Excel dosyalarını bellek içinde oluştur
-        saver = SaverLikeIkasTemplate(r"template\ikas-urunler.xlsx")
+        saver = SaverLikeIkasTemplate()
         
         # Success Excel
         success_buffer = io.BytesIO()
@@ -239,7 +239,7 @@ def process_products_zip():
         logger.info(f"Başarılı: {len(products)}, Başarısız: {len(failed_products)}")
         
         # Excel dosyalarını bellek içinde oluştur
-        saver = SaverLikeIkasTemplate(r"template\ikas-urunler.xlsx")
+        saver = SaverLikeIkasTemplate()
         
         # Success Excel
         success_buffer = io.BytesIO()

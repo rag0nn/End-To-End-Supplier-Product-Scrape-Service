@@ -1,7 +1,7 @@
 import logging
 from typing import List
-from core.processer import Processer,SaverLikeIkasTemplate
-from core.structers.product import Suppliers, PreState
+from supplier_scrape_core.processer import Processer,SaverLikeIkasTemplate
+from supplier_scrape_core.structers.product import Suppliers, PreState
 from pathlib import Path
 # erişim
 # logging
