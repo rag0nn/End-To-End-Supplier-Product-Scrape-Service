@@ -1,10 +1,10 @@
+# -*- coding: utf-8 -*-
 import logging
 from typing import List
 from supplier_scrape_core.processer import Processer,SaverLikeIkasTemplate
 from supplier_scrape_core.structers.product import Suppliers, PreState
 from pathlib import Path
-# erişim
-# logging
+
 class ColorFormatter(logging.Formatter):
     COLORS = {
         logging.DEBUG: "\033[36m",    # Cyan
@@ -18,7 +18,8 @@ class ColorFormatter(logging.Formatter):
     def format(self, record):
         color = self.COLORS.get(record.levelno, self.RESET)
         message = super().format(record)
-        return f"{color}{message}{self.RESET}"
+        return f'{color}{message}{self.RESET}'
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     products, failed_producuts = p.get_with_code(Suppliers.BALGUNES,*prestates)
 
     # İkas templatiyle frame oluştur
-    S = SaverLikeIkasTemplate(r"core\template\ikas-urunler.xlsx")
+    S = SaverLikeIkasTemplate(r"supplier_scrape_core\template\ikas-urunler.xlsx")
     
     # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
     S.fill(products,static_values,"./output/success.xlsx")

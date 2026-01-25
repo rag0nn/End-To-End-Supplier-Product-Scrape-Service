@@ -76,9 +76,10 @@ class Product:
             'puan': self.puan,
             'marka' : self.marka.value["prefix"]
         }
-
-
     
+    def serialize(self):
+        return f"{self.urun_kodu}-{self.urun_ismi}-{self.kategori}-{self.kategori_url}-{self.gorsel_url}-{self.fiyat}-{self.stok}-{self.aciklama}-{self.puan}-{self.marka.value['prefix']}"
+
     def __repr__(self) -> str:
         return f"Product(kodu={self.urun_kodu}, ismi={self.urun_ismi})"
     

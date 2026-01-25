@@ -2,3 +2,4 @@ output
 backend/test_output
 __pycache__
 intro_to_Flask.py
+config

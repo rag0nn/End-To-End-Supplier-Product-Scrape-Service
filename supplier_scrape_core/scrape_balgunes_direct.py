@@ -1,12 +1,10 @@
-import requests
+# import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from typing import Dict, List, Optional
 import logging
 from .structers.product import Product,Suppliers
-
-
-
+import requests
 class BalgunesProductScraper:
     """Ürün bilgilerini web'den çeken ve işleyen sınıf"""
     
@@ -36,7 +34,8 @@ class BalgunesProductScraper:
             logging.info(f"Sending: {url}")
             response = requests.get(url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
-            
+    
+
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Ürün bilgilerini çek
