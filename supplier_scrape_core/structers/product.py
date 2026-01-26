@@ -3,9 +3,18 @@ from typing import Dict, Optional
 from enum import Enum
 
 class Suppliers(Enum):
-    BALGUNES = {"prefix" : "11", 
+    BALGUNES = {"prefix" : "11",
+                "name" : "BALGÜNEŞ", 
                 "search_link_prefix" : "https://www.balgunestekstil.com/urunler/arama?q={code}"
                 }
+    BABEXI = {"prefix" : "12",
+                "name" : "BABEXI", 
+                "search_link_prefix" : "https://www.toptanbebegiyim.com/urunler/arama?q={code}"
+                }
+    MALKOC = {"prefix" : "13",
+                "name" : "MALKOÇ", 
+                "search_link_prefix" : "https://www.malkocbebe.com/urunler/arama?q={code}"
+                }       
     
 class PreState:
     """Ürünün çekilip çekilmeme durumuna bakılmaksızın geçirelecek stok, ürün kodu ve fiyat bilgisi"""

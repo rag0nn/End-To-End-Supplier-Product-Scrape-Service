@@ -9,12 +9,38 @@ from PyQt6.QtCore import Qt
 import sys
 import os
 from enum import Enum
+import logging
 
 # API kökü dizinini sys.path'e ekle
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from supplier_scrape_core.processer import Processer, SaverLikeIkasTemplate
+from supplier_scrape_core.structers.product import PreState, Suppliers, Product
 
-class SupplierEnum(Enum):
-    BALGUNES = ["11","BalGüneş"]
+
+class ColorFormatter(logging.Formatter):
+    COLORS = {
+        logging.DEBUG: "\033[36m",    # Cyan
+        logging.INFO: "\033[32m",     # Green
+        logging.WARNING: "\033[33m",  # Yellow
+        logging.ERROR: "\033[31m",    # Red
+        logging.CRITICAL: "\033[41m", # Red background
+    }
+    RESET = "\033[0m"
+
+    def format(self, record):
+        color = self.COLORS.get(record.levelno, self.RESET)
+        message = super().format(record)
+        return f'{color}{message}{self.RESET}'
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(ColorFormatter(
+    "%(asctime)s - %(levelname)s - %(message)s"
+))
+logger.addHandler(handler)
+
 
 
         
@@ -22,7 +48,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
+
         self.setWindowTitle("Ürün Çekme Uygulaması")
         self.setGeometry(100, 100, 1200, 600)
         self.set_central_widget()
@@ -61,7 +87,7 @@ class MainWindow(QMainWindow):
         # supplier kodu
         self.supplier_label = QLabel("Tedarikçi Kodu")
         self.supplier_combo = QComboBox()
-        self.supplier_combo.addItems(list(str(x.value[0] + " " + x.value[1]) for x in SupplierEnum))
+        self.supplier_combo.addItems(list(str(x.value["prefix"] + " " + x.value["name"]) for x in Suppliers))
         h_layout.addWidget(self.supplier_label)
         h_layout.addWidget(self.supplier_combo)
         
@@ -129,13 +155,13 @@ class MainWindow(QMainWindow):
 
         
         supplierIdx =  self.supplier_combo.currentIndex()
-        chosenSupplier = list(SupplierEnum)[supplierIdx]
+        chosenSupplier = list(Suppliers)[supplierIdx]
         product_count = int(self.product_count_box.text())
         
         row = self.table_widget.rowCount()
         self.table_widget.insertRow(row)
 
-        self.table_widget.setItem(row, 0, QTableWidgetItem(chosenSupplier.value[0]))
+        self.table_widget.setItem(row, 0, QTableWidgetItem(chosenSupplier.value["prefix"]))
         self.table_widget.setItem(row, 1, QTableWidgetItem(str(product_code)))
         self.table_widget.setItem(row, 2, QTableWidgetItem(str(product_price)))
         self.table_widget.setItem(row, 3, QTableWidgetItem(str(product_count)))
@@ -197,64 +223,69 @@ class MainWindow(QMainWindow):
         if self.send_type_checkbox.isChecked():
             QMessageBox.warning(self, "Hata", "Şuanda çevrimiçi işlem mümkün değildir")
         else:
-            try:
-                from supplier_scrape_core.processer import Processer, SaverLikeIkasTemplate
-                from supplier_scrape_core.structers.product import PreState, Suppliers, Product
-
-                processer = Processer()
-                prestates  = []
-                for row in data:
-                    # Tedarikçi kodundan enum'u bul
-                    supplier = None
-                    for elem in Suppliers:
-                        if elem.value["prefix"] == row[0]:
-                            supplier = elem
-                            break
+            processer = Processer()
+            
+            # tedarikçi kategorilerne göre ayıkla ve dictte tut
+            sup_prestates = {}
+            for i in Suppliers:
+                sup_prestates.update({i : []})
+                
+            for row in data:
+                
+                for elem in Suppliers:
+                    if elem.value["prefix"] == row[0]:
+                        supplier = elem
+                        break
+                
+                if supplier is None:
+                    QMessageBox.warning(self, "Hata", f"Tedarikçi '{row[0]}' bulunamadı")
+                    continue
+                
+                try:
+                    code = int(row[1])
+                    price = int(row[2])
+                    stock = int(row[3])
                     
-                    if supplier is None:
-                        QMessageBox.warning(self, "Hata", f"Tedarikçi '{row[0]}' bulunamadı")
-                        continue
+                    prestate = PreState(code=code, price=price, stock=stock)
                     
-                    try:
-                        code = int(row[1])
-                        price = int(row[2])
-                        stock = int(row[3])
-                        
-                        prestate = PreState(code=code, price=price, stock=stock)
-                        prestates.append(prestate)
-                              
-                    except ValueError as e:
-                        QMessageBox.warning(self, "Hata", f"Geçersiz veri formatı: {str(e)}")
-                        continue
-                    except Exception as e:
-                        QMessageBox.warning(self, "Hata", f"İşlem hatası: {str(e)}")
-                        continue
-                products, failed_producuts = processer.get_with_code(supplier, *prestates)
+                    sup_prestates[supplier].append(prestate)
+                            
+                except ValueError as e:
+                    QMessageBox.warning(self, "Hata", f"Geçersiz veri formatı: {str(e)}")
+                    continue
+                except Exception as e:
+                    QMessageBox.warning(self, "Hata", f"İşlem hatası: {str(e)}")
+                    continue
+                
+            print(
+                "sup PRESTATES", sup_prestates
+            )
+            
+            for k,v in sup_prestates.items():
+                if len(v) == 0:
+                    continue
+                
+                products, failed_producuts = processer.get_with_code(k, *sup_prestates[k])
                 products:list[Product]
                 failed_producuts:list[Product]
                 
                 # Table yenile başarılı
                 for product in products:
-                    print("Başarılı")
                     for j, row in enumerate(data):
                         code = int(row[1])     
                         product_code = str(product.urun_kodu)[2:]
-                        print("PRODUCT CODE: ", product_code)
-                        print(" CODE: ", code)
                         if str(product_code) == str(code):
                             self.table_widget.setItem(j,4,QTableWidgetItem(str(True)))
                             break
-                # Table yenile başarılı
+                # Table yenile başarısız
                 for product in failed_producuts:
-                    print("Başarılı")
                     for j, row in enumerate(data):
                         code = int(row[1])     
                         product_code = str(product.urun_kodu)[2:]
-                        print("PRODUCT CODE: ", product_code)
-                        print(" CODE: ", code)
                         if str(product_code) == str(code):
                             self.table_widget.setItem(j,4,QTableWidgetItem(str(False)))
                             break
+                        
                 saver = SaverLikeIkasTemplate()
                                 
                 # statement
@@ -263,15 +294,12 @@ class MainWindow(QMainWindow):
                     "Tip" : "PHYSICAL"}
 
                 # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
-                saver.fill(products,static_values,"./frontend/desktop/output/success.xlsx")
+                saver.fill(products,static_values,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
                 
                 # Başarısız olanları ikas frame'inde doldur ve kaydet
-                saver.fill(failed_producuts,static_values,"./frontend/desktop/output/failed.xlsx")
+                saver.fill(failed_producuts,static_values,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
 
-                QMessageBox.information(self, "Başarılı", f"Ürünler işlendi")
-     
-            except ImportError as e:
-                QMessageBox.critical(self, "Import Hatası", f"Modül yüklenemedi:\n{str(e)}")
+            QMessageBox.information(self, "Başarılı", f"Ürünler başarıyla işlendi")
 
 def main():
     """Ana fonksiyon"""
