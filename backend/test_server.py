@@ -4,7 +4,7 @@ import time
 import os
 from typing import Dict, List
 from supplier_scrape_core.structers.product import PreState,Suppliers,Product
-from supplier_scrape_core.processer import SaverLikeIkasTemplate
+from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.config.config import STATIC_VALUES
 from interfaces import create_payload
 

@@ -13,7 +13,8 @@ import logging
 
 # API kökü dizinini sys.path'e ekle
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from supplier_scrape_core.processer import Processer, SaverLikeIkasTemplate
+from supplier_scrape_core.processer import Processer
+from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.structers.product import PreState, Suppliers, Product
 
 
