@@ -4,6 +4,7 @@ from typing import List
 from supplier_scrape_core.processer import Processer
 from supplier_scrape_core.structers.product import Suppliers,PreState
 from flask import Flask, request, jsonify
+from interfaces import create_response
 
 # app initialize
 app = Flask(__name__)
@@ -86,21 +87,9 @@ def fetch_products():
         logging.info(f"Products will fetch using {supplier.name}")
         prodducts_successed, products_failed = processer.get_with_code(supplier,*prestates)
         
-        # ürünleri serialize et
-        serialized_successed = [product.serialize() for product in prodducts_successed]
-        serialized_failed = [product.serialize() for product in products_failed]
+        # response oluştur
+        response = create_response(prodducts_successed, products_failed)
         
-        # response
-        response = {
-            "successed" : {
-                "count" : len(serialized_successed),
-                "products" : serialized_successed
-            },
-            "failed" : {
-                "count" : len(serialized_failed),
-                "products" : serialized_failed
-            }
-        }
         return jsonify(response), 200
     
     except Exception as e:

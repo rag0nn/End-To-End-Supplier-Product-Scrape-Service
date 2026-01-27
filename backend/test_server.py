@@ -6,6 +6,7 @@ from typing import Dict, List
 from supplier_scrape_core.structers.product import PreState,Suppliers,Product
 from supplier_scrape_core.processer import SaverLikeIkasTemplate
 from supplier_scrape_core.config.config import STATIC_VALUES
+from interfaces import create_payload
 
 TEST_PRESTATES = {
     Suppliers.BALGUNES : [
@@ -79,9 +80,7 @@ class ServerTester:
         
     def fetch_product_check(self,prestates: List[PreState], supplier:Suppliers)->List[Product]:
         try:
-            payload = {"prestates" : list(dict(p) for p in prestates),
-                "supplier" : supplier.value["prefix"]
-                }
+            payload = create_payload(prestates,supplier)
             
             self._print_info(f"Payload gönderiliyor: {json.dumps(payload, indent=2)}")
             response = requests.post(
