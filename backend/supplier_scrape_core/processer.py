@@ -1,6 +1,6 @@
 from typing import List
 import requests
-from .scrape_balgunes_direct import BalgunesProductScraper
+from .scrape_direct import ProductScraper
 import logging
 import pandas as pd
 from .structers.product import Product, Suppliers, PreState
@@ -25,7 +25,6 @@ headers = {
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "none",
     "Cache-Control": "max-age=0",
-    "Referer": "https://www.balgunestekstil.com/"
 }
 
 def create_session_with_retries():
@@ -52,65 +51,63 @@ class Processer:
         self.product_scraper = None
     
     def get_with_code(self,supplier:Suppliers,*prestates:List[PreState])->tuple:
-        if supplier == Suppliers.BALGUNES:
-            self.product_scraper = BalgunesProductScraper()
-        else:
-            raise Exception("Invalid Supplier Choise")
-            return
-            
+        self.product_scraper = ProductScraper()
+
         products = []
         failed_products = []
+        logging.info(f"\n{'=' *60}\nStarting with: {supplier.value['name']} Supplier")
         for i, prestate in enumerate(prestates):
+            prestate:PreState
             url = supplier.value["search_link_prefix"].format(code=str(prestate.code))
-            logging.info(f"[{i}] Searching url: "+url)
+            logging.info(f"[{i}][{prestate.code}] Searching url: "+url)
             
             # Retry mekanizmasıyla session oluştur
             session = create_session_with_retries()
             
-            logging.debug(f"[{i}] Session headers: {session.headers}")
+            logging.debug(f"[{i}][{prestate.code}] Session headers: {session.headers}")
 
             # çekilememe durumunda atanacak eleman
             failed_product = Product(urun_kodu=prestate.code,marka=supplier,fiyat=prestate.price,stok=prestate.stock)
             
             try:
                 # SSL verification devre dışı ve timeout ekle
-                logging.info(f"[{i}] Fetching with verify=False, timeout=15")
+                logging.info(f"[{i}][{prestate.code}] Fetching with verify=False, timeout=15")
                 response = session.get(url, timeout=15, verify=False)
-                logging.info(f"[{i}] Response status code: {response.status_code}")
-                logging.debug(f"[{i}] Response headers: {response.headers}")
+                logging.info(f"[{i}][{prestate.code}] Response status code: {response.status_code}")
+                logging.debug(f"[{i}][{prestate.code}] Response headers: {response.headers}")
             except Exception as e:
-                logging.error(f"[{i}] Exception on html fetch (retry failed): {str(e)}")
+                logging.error(f"[{i}][{prestate.code}] Exception on finding with search (retry failed): {str(e)}")
                 failed_products.append(failed_product)
                 continue
             
             if response.status_code == 200:
                 html_content = response.text
             else:
-                logging.error(f"[{i}] Exception on html fetch: {response.status_code}")
+                logging.error(f"[{i}][{prestate.code}] Exception on html fetch: {response.status_code}")
                 failed_products.append(failed_product)
                 continue
             
             link, ret = self.product_scraper.extract_product_href_using_search(html_content)
             
             if ret:
-                logging.info(f"[{i}] Product Link: "+ link)
+                logging.info(f"[{i}][{prestate.code}] Product Link: "+ link)
             else:
-                logging.error(f"[{i}] Not found product: "+ str(prestate.code))
+                logging.error(f"[{i}][{prestate.code}] Product not found: ")
                 failed_products.append(failed_product)
                 continue
             
             product = self.product_scraper.scrape_product(link, supplier)
             if product:
-                logging.info(f"[{i}] Success: {product}")
+                logging.info(f"[{i}][{prestate.code}] Product fetch Success: {product}")
             else:
-                logging.error(f"[{i}] Exception on product fetch")
+                logging.error(f"[{i}][{prestate.code}] Exception on product fetch")
                 failed_products.append(failed_product)
                 continue
             
             product.fiyat = prestate.price
             product.stok = prestate.stock
             products.append(product)
-        logging.info(f"Total Successful: {len(products)} Failed: {len(failed_products)}")
+        logging.info(f"\nTotal Successful: {len(products)} Failed: {len(failed_products)}\n{supplier.value['name']} fetch process ended.\n{'='*60}")
         return products, failed_products
             
 class SaverLikeIkasTemplate:
@@ -121,8 +118,7 @@ class SaverLikeIkasTemplate:
         else: 
             self.template_path = template_path
             
-            logging.info(f"Output template path: {self.template_path}")
-            print(f"Output template path: {self.template_path}")
+        logging.info(f"Template path: {self.template_path}")
         self.template_frame = self._get_template()
         self.column_remap = self._get_column_remap()
         
@@ -131,6 +127,7 @@ class SaverLikeIkasTemplate:
             frame = pd.read_excel(self.template_path)
         except Exception as e:
             logging.error(f"{e} /n Template Okunamadı")
+            raise Exception(e)
         return frame
     
     def _get_column_remap(self):

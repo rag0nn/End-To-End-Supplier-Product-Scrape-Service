@@ -1,13 +1,16 @@
-import requests
 from bs4 import BeautifulSoup
-import pandas as pd
-from typing import Dict, List, Optional
+from typing import Optional
 import logging
 from .structers.product import Product,Suppliers
+import requests
 
+"""
+Önce ürün kodu ile ürün araması yapan sonra bu başarılı olduğunda ürün bilgilerini (Product)
+classıyla döndüren
+SaveLikeİkas class'ıyla da ikas ürün template (xlsx) olarak bu ürünleri dolduran kod parçaları
+"""
 
-
-class BalgunesProductScraper:
+class ProductScraper:
     """Ürün bilgilerini web'den çeken ve işleyen sınıf"""
     
     def __init__(self, timeout: int = 10):
@@ -36,7 +39,8 @@ class BalgunesProductScraper:
             logging.info(f"Sending: {url}")
             response = requests.get(url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
-            
+    
+
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Ürün bilgilerini çek
@@ -151,16 +155,3 @@ class BalgunesProductScraper:
         except Exception as e:
             print(f"Hata oluştu: {e}")
             return None, False
-
-
-# # Test kodu
-# if __name__ == "__main__":
-#     # HTML dosyasından oku
-#     with open('balgunes-pages/search.html', 'r', encoding='utf-8') as file:
-#         html_content = file.read()
-    
-#     # Fonksiyonu test et
-#     href, found = extract_product_href(html_content)
-    
-#     print(f"Bulundu: {found}")
-#     print(f"Href: {href}")

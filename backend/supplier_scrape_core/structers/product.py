@@ -3,9 +3,18 @@ from typing import Dict, Optional
 from enum import Enum
 
 class Suppliers(Enum):
-    BALGUNES = {"prefix" : "11", 
+    BALGUNES = {"prefix" : "11",
+                "name" : "BALGÜNEŞ", 
                 "search_link_prefix" : "https://www.balgunestekstil.com/urunler/arama?q={code}"
                 }
+    BABEXI = {"prefix" : "12",
+                "name" : "BABEXI", 
+                "search_link_prefix" : "https://www.toptanbebegiyim.com/urunler/arama?q={code}"
+                }
+    MALKOC = {"prefix" : "13",
+                "name" : "MALKOÇ", 
+                "search_link_prefix" : "https://www.malkocbebe.com/urunler/arama?q={code}"
+                }       
     
 class PreState:
     """Ürünün çekilip çekilmeme durumuna bakılmaksızın geçirelecek stok, ürün kodu ve fiyat bilgisi"""
@@ -17,6 +26,19 @@ class PreState:
     def __repr__(self):
         return f"PreState {self.code} {self.price} {self.stock}"
     
+    def __iter__(self):
+        yield "code", self.code
+        yield "stock", self.stock
+        yield "price", self.price
+        
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            code=data["code"],
+            stock=data["stock"],
+            price=data["price"],
+        )
+
 class Product:
     """Ürün bilgilerini temsil eden sınıf"""
     
@@ -74,12 +96,37 @@ class Product:
             'stok': self.stok,
             'aciklama': self.aciklama,
             'puan': self.puan,
-            'marka' : self.marka.value["prefix"]
+            'marka' : self.marka.value["prefix"] if self.marka else "None"
         }
     
     def serialize(self):
         return f"{self.urun_kodu}-{self.urun_ismi}-{self.kategori}-{self.kategori_url}-{self.gorsel_url}-{self.fiyat}-{self.stok}-{self.aciklama}-{self.puan}-{self.marka.value['prefix']}"
 
+    @classmethod
+    def from_Serialize(cls, data: str):
+        items = data.split("-")
+        
+        # Supplier prefix'ine göre marka belirle
+        prefix = items[9]
+        marka = None
+        for supplier in Suppliers:
+            if supplier.value["prefix"] == prefix:
+                marka = supplier
+                break
+        
+        return cls(
+            urun_kodu=items[0],
+            urun_ismi=items[1],
+            kategori=items[2],
+            kategori_url=items[3],
+            gorsel_url=items[4],
+            fiyat=items[5],
+            stok=items[6],
+            aciklama=items[7],
+            puan=items[8],
+            marka=marka
+        )
+    
     def __repr__(self) -> str:
         return f"Product(kodu={self.urun_kodu}, ismi={self.urun_ismi})"
     

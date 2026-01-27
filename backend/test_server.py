@@ -1,126 +1,125 @@
 import requests
 import json
 import time
+import os
 from typing import Dict, List
+from supplier_scrape_core.structers.product import PreState,Suppliers,Product
+from supplier_scrape_core.processer import SaverLikeIkasTemplate
+from supplier_scrape_core.config.config import STATIC_VALUES
 
-# Test verileri
-TEST_PRESTATES = [
-    {"code": 145204, "price": 30, "stock": 12},
-    {"code": 147149, "price": 50, "stock": 10},
-]
+TEST_PRESTATES = {
+    Suppliers.BALGUNES : [
+        PreState(175441,350,1),
+        PreState(177031,420,1),
+        PreState(177073,220,6)
+    ],
+    Suppliers.BABEXI : [
+        PreState(444493,30,12),
+        PreState(436739,30,12),
+        PreState(431525,12,3)
+    ],
+    Suppliers.MALKOC : [
+        PreState(543120,30,12),
+        PreState(534516,30,12),
+        PreState(130777,12,3)
+    ]
+}
 
 LOCAL_SERVER_URL = "http://localhost:5000"
 REMOTE_SERVER_URL = "http://your-remote-server.com"  # Uzak sunucu URL'sini buraya yazın
 
 class ServerTester:
-    """Server test sınıfı"""
+    """Server test class"""
     
     def __init__(self, base_url: str, server_name: str = "Server"):
         self.base_url = base_url
         self.server_name = server_name
         self.results = []
-    
-    def print_header(self, text: str):
+        
+    def _print_header(self, text: str):
         """Test başlığı yazdır"""
         print(f"\n{'='*60}")
         print(f"  {text}")
         print(f"{'='*60}\n")
     
-    def print_success(self, text: str):
+    def _print_success(self, text: str):
         """Başarı mesajı yazdır"""
         print(f"✓ {text}")
     
-    def print_error(self, text: str):
+    def _print_error(self, text: str):
         """Hata mesajı yazdır"""
         print(f"✗ {text}")
     
-    def print_info(self, text: str):
+    def _print_info(self, text: str):
         """Bilgi mesajı yazdır"""
         print(f"ℹ {text}")
-    
-    def test_health_check(self) -> bool:
-        """Health check endpoint'ini test et"""
+        
+    def health_check(self) -> bool:
+        """Health check"""
         try:
-            response = requests.get(f"{self.base_url}/api/health", timeout=5)
+            response = requests.get(f"{self.base_url}/health", timeout=5)
             
             if response.status_code == 200:
                 data = response.json()
-                self.print_success(f"Health check başarılı: {data.get('message')}")
+                self._print_success(f"Health check başarılı: {data.get('message')}")
                 self.results.append(("Health Check", True, response.status_code))
                 return True
             else:
-                self.print_error(f"Health check başarısız: {response.status_code}")
+                self._print_error(f"Health check başarısız: {response.status_code}")
                 self.results.append(("Health Check", False, response.status_code))
-                return False
-                
+                return False       
         except requests.exceptions.ConnectionError:
-            self.print_error(f"Sunucuya bağlanılamadı: {self.base_url}")
+            self._print_error(f"Sunucuya bağlanılamadı: {self.base_url}")
             self.results.append(("Health Check", False, "Connection Error"))
             return False
         except Exception as e:
-            self.print_error(f"Health check hatası: {str(e)}")
+            self._print_error(f"Health check hatası: {str(e)}")
             self.results.append(("Health Check", False, str(e)))
             return False
-    
-    def test_process_products(self, prestates: List[Dict] = None) -> bool:
-        """Process products endpoint'ini test et"""
-        if prestates is None:
-            prestates = TEST_PRESTATES
         
+    def fetch_product_check(self,prestates: List[PreState], supplier:Suppliers)->List[Product]:
         try:
-            payload = {
-                "prestates": prestates,
-                "supplier": "BALGUNES"
-            }
+            payload = {"prestates" : list(dict(p) for p in prestates),
+                "supplier" : supplier.value["prefix"]
+                }
             
-            self.print_info(f"Payload gönderiliyor: {json.dumps(payload, indent=2)}")
-            
+            self._print_info(f"Payload gönderiliyor: {json.dumps(payload, indent=2)}")
             response = requests.post(
-                f"{self.base_url}/api/process-products",
-                json=payload,
-                timeout=30
+                f"{self.base_url}/fetch-products",
+                json = payload,
+                timeout = 30
             )
             
-            self.print_info(f"Response status: {response.status_code}")
-            
+            self._print_info(f"Response status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
-                print("Process Products Response: ",data)
-                success_count = data.get('success', {}).get('count', 0)
-                failed_count = data.get('failed', {}).get('count', 0)
                 
-                self.print_success(f"Process başarılı!")
-                self.print_info(f"  Başarılı ürünler: {success_count}")
-                self.print_info(f"  Başarısız ürünler: {failed_count}")
-                
-                # İlk 2 ürünü göster
-                success_products = data.get('success', {}).get('products', [])
-                if success_products:
-                    self.print_info("Başarılı ürünlerin ilk 2'si:")
-                    for product in success_products[:2]:
-                        print(f"    - {product}")
-                
-                self.results.append(("Process Products", True, response.status_code))
-                return True
-            else:
-                error_msg = response.json().get('error', 'Bilinmeyen hata')
-                self.print_error(f"Process başarısız: {error_msg}")
-                self.results.append(("Process Products", False, response.status_code))
-                return False
-                
+                successed_count = data.get('successed', {}).get('count',0)
+                failed_count = data.get('failed', {}).get('count',0)
+
+                self._print_info(f"Başarılı: {successed_count} Başarısız: {failed_count}")
+
+                self.results.append(("Fetch products", True, response.status_code))
+         
+                products = []
+                for title in ["successed","failed"]:
+                    for item in data.get(title).get("products",[]):
+                        product = Product.from_Serialize(item)
+                        products.append(product)
+            return products
         except requests.exceptions.Timeout:
-            self.print_error("İstek zaman aşımına uğradı (timeout)")
+            self._print_error("İstek zaman aşımına uğradı (timeout)")
             self.results.append(("Process Products", False, "Timeout"))
             return False
         except requests.exceptions.ConnectionError:
-            self.print_error(f"Sunucuya bağlanılamadı: {self.base_url}")
+            self._print_error(f"Sunucuya bağlanılamadı: {self.base_url}")
             self.results.append(("Process Products", False, "Connection Error"))
             return False
         except Exception as e:
-            self.print_error(f"Process hatası: {str(e)}")
+            self._print_error(f"Process hatası: {str(e)}")
             self.results.append(("Process Products", False, str(e)))
             return False
-    
+
     def test_invalid_request(self) -> bool:
         """Geçersiz istek test et"""
         try:
@@ -129,26 +128,26 @@ class ServerTester:
             }
             
             response = requests.post(
-                f"{self.base_url}/api/process-products",
+                f"{self.base_url}/process-products",
                 json=payload,
                 timeout=10
             )
             
             if response.status_code == 400:
                 error_msg = response.json().get('error', '')
-                self.print_success(f"Geçersiz istek doğru şekilde reddedildi: {error_msg}")
+                self._print_success(f"Geçersiz istek doğru şekilde reddedildi: {error_msg}")
                 self.results.append(("Invalid Request", True, response.status_code))
                 return True
             else:
-                self.print_error(f"Geçersiz istek doğru şekilde işlenmedi: {response.status_code}")
+                self._print_error(f"Geçersiz istek doğru şekilde işlenmedi: {response.status_code}")
                 self.results.append(("Invalid Request", False, response.status_code))
                 return False
-                
+            
         except Exception as e:
-            self.print_error(f"Geçersiz istek test hatası: {str(e)}")
+            self._print_error(f"Geçersiz istek test hatası: {str(e)}")
             self.results.append(("Invalid Request", False, str(e)))
             return False
-    
+
     def test_empty_request(self) -> bool:
         """Boş istek test et"""
         try:
@@ -157,28 +156,28 @@ class ServerTester:
             }
             
             response = requests.post(
-                f"{self.base_url}/api/process-products",
+                f"{self.base_url}/process-products",
                 json=payload,
                 timeout=10
             )
             
             if response.status_code == 400:
-                self.print_success(f"Boş istek doğru şekilde reddedildi")
+                self._print_success(f"Boş istek doğru şekilde reddedildi")
                 self.results.append(("Empty Request", True, response.status_code))
                 return True
             else:
-                self.print_error(f"Boş istek doğru şekilde işlenmedi: {response.status_code}")
+                self._print_error(f"Boş istek doğru şekilde işlenmedi: {response.status_code}")
                 self.results.append(("Empty Request", False, response.status_code))
                 return False
                 
         except Exception as e:
-            self.print_error(f"Boş istek test hatası: {str(e)}")
+            self._print_error(f"Boş istek test hatası: {str(e)}")
             self.results.append(("Empty Request", False, str(e)))
             return False
-    
+        
     def print_summary(self):
         """Test sonuçlarının özetini yazdır"""
-        self.print_header(f"{self.server_name} - Test Özeti")
+        self._print_header(f"{self.server_name} - Test Özeti")
         
         total = len(self.results)
         passed = sum(1 for _, success, _ in self.results if success is True)
@@ -193,60 +192,64 @@ class ServerTester:
             status_icon = "✓" if success is True else "✗"
             print(f"{status_icon} {test_name}: {status}")
     
-    def run_all_tests(self):
-        """Tüm testleri çalıştır"""
-        self.print_header(f"{self.server_name} Testleri Başlıyor")
-        
-        # Health check
-        if not self.test_health_check():
-            self.print_error("Sunucu yanıt vermiyor. Diğer testler atlanıyor.")
-            self.print_summary()
-            return False
-        
-        time.sleep(1)
-        
-        # Process products
-        self.test_process_products()
-        
-        time.sleep(1)
-        
-        # Invalid request
-        self.test_invalid_request()
-        
-        time.sleep(1)
-        
-        # Empty request
-        self.test_empty_request()
-        
-        self.print_summary()
-        return True
-
-
-def main():
-    """Ana test fonksiyonu"""
-    
+def main(local:bool):
     print("\n" + "="*60)
     print("  Flask API Server Test Suite")
     print("="*60)
     
-    # Lokal server test
-    print("\n\n")
-    local_tester = ServerTester(LOCAL_SERVER_URL, "Lokal Server")
-    local_success = local_tester.run_all_tests()
-    
-    # Uzak server test
-    print("\n\n")
-    if REMOTE_SERVER_URL != "http://your-remote-server.com":
-        remote_tester = ServerTester(REMOTE_SERVER_URL, "Uzak Server")
-        remote_success = remote_tester.run_all_tests()
+    if local:
+        print("Lokal Sunucu Testi")
+        tester = ServerTester(LOCAL_SERVER_URL, "Lokal Server Tester")
     else:
-        print("⚠ Uzak sunucu URL'si yapılandırılmamış.")
-        print("  test_server.py dosyasında REMOTE_SERVER_URL değişkenini düzenleyin.")
+        print("Uzak Sunucu Testi")
+        tester = ServerTester(REMOTE_SERVER_URL,"Uzak Sunucu Tester")
     
-    print("\n" + "="*60)
-    print("  Test Tamamlandı")
-    print("="*60 + "\n")
+    # sağlık testi
+    result = tester.health_check()
+    if not result:
+        print("Sunucu sağlığı: False")
+        return 
+    
+    time.sleep(1)
+    
+    result_products = {}
+    
+    # ürün testi
+    for k,v in TEST_PRESTATES.items():
+        saver =  SaverLikeIkasTemplate()
+        
+        print("Test ediliyor: ", k.name)
+        products : List[Product] = tester.fetch_product_check(v,k)
+        result_products.update({k.name : products})
+        
+        try:
+            # save outputs
+            output_dst_path = f"{os.path.dirname(__file__)}/test_output/{k.name}.xlsx"
+            saver.fill(products,STATIC_VALUES,output_dst_path)
+        except Exception as e:
+            print(f"Kaydetme sırasında bir sorun çıktı \n{e}")
+            raise e
+        
+        
+    print("Alınan veri: ", result_products)
+    time.sleep(1)
+    
+    # Geçersiz request testi
+    tester.test_invalid_request()
+    
+    time.sleep(1)
+    
+    # Boş testi
+    tester.test_empty_request()
+    
+    tester.print_summary()
+    return True
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    print(STATIC_VALUES)
+    local_test = True
+    result = main(local_test)
+    if result:
+        print("Test Başarıyla sonuçlandırıldı")
+    else:
+        print("Test problem ile sonuçalndırıldı")

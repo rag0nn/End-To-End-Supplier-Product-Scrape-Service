@@ -55,7 +55,7 @@ class Processer:
 
         products = []
         failed_products = []
-        logging.info(f"\n{'=' *60}\nStarting with: {supplier.value["name"]} Supplier")
+        logging.info(f"\n{'=' *60}\nStarting with: {supplier.value['name']} Supplier")
         for i, prestate in enumerate(prestates):
             prestate:PreState
             url = supplier.value["search_link_prefix"].format(code=str(prestate.code))
@@ -107,7 +107,7 @@ class Processer:
             product.fiyat = prestate.price
             product.stok = prestate.stock
             products.append(product)
-        logging.info(f"\nTotal Successful: {len(products)} Failed: {len(failed_products)}\n{supplier.value["name"]} fetch process ended.\n{'='*60}")
+        logging.info(f"\nTotal Successful: {len(products)} Failed: {len(failed_products)}\n{supplier.value['name']} fetch process ended.\n{'='*60}")
         return products, failed_products
             
 class SaverLikeIkasTemplate:
