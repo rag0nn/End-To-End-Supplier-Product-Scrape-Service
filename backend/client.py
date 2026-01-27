@@ -1,7 +1,7 @@
 from supplier_scrape_core.structers.product import PreState,Suppliers,Product
 from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.config.config import STATIC_VALUES
-from interfaces import create_payload
+from .interfaces import create_payload
 from typing import List, Optional, Tuple
 import requests
 import logging
@@ -13,7 +13,10 @@ class Client:
     
     def __init__(self, base_url):
         self.base_url = base_url
-    
+        
+        health = self._health_check()
+        logging.info(f"Server health {health}")
+        
     def _health_check(self):
         """Health check"""
         try:
@@ -28,7 +31,7 @@ class Client:
         except Exception as e:
                 return False
             
-    def send(self,prestates: List[PreState],supplier:Suppliers, save_path : Optional[str])->Tuple[List[Product],List[Product]]:
+    def send(self,prestates: List[PreState],supplier:Suppliers, save_path : Optional[str] = None)->Tuple[List[Product],List[Product]]:
         """
         Send prestates to the remote product-fetching endpoint, parse the response and optionally save results to Excel files.
         Parameters

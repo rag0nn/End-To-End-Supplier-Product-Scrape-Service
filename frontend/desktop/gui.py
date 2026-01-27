@@ -6,16 +6,19 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QPalette, QColor
 from PyQt6.QtCore import Qt
+from enum import Enum
+from typing import Dict, List
 import sys
 import os
-from enum import Enum
 import logging
+import yaml
 
 # API kökü dizinini sys.path'e ekle
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from supplier_scrape_core.processer import Processer
 from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.structers.product import PreState, Suppliers, Product
+from backend.client import Client
 
 
 class ColorFormatter(logging.Formatter):
@@ -50,10 +53,17 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.config = self.load_config()
         self.setWindowTitle("Ürün Çekme Uygulaması")
         self.setGeometry(100, 100, 1200, 600)
         self.set_central_widget()
 
+    def load_config(self)->Dict:
+        pth = f"{os.path.dirname(__file__)}/config.yaml"
+        with open(pth) as f:
+            config = yaml.safe_load(f)
+        return config
+    
     def set_central_widget(self):
         """Merkezi widget'ı ve düzenini ayarla"""
         central_widget = QWidget()
@@ -207,11 +217,12 @@ class MainWindow(QMainWindow):
         return layout
         
     def send(self):
+        
         if self.table_widget.rowCount() == 0:
             QMessageBox.warning(self, "Hata", "Tabloya herhangi bir öğe eklenmemiş")
-            
             return
 
+        # tedarikçi kategorilerine göre ayıkla, sub_prestates sözlüğünde tut
         data = []
         for row in range(self.table_widget.rowCount()):
             row_data = []
@@ -220,48 +231,85 @@ class MainWindow(QMainWindow):
                 row_data.append(item.text() if item else None)
             data.append(row_data)
 
-        #print(data)
+        sup_prestates = {}
+        for i in Suppliers:
+            sup_prestates.update({i : []})
+            
+        for row in data:
+            
+            for elem in Suppliers:
+                if elem.value["prefix"] == row[0]:
+                    supplier = elem
+                    break
+            
+            if supplier is None:
+                QMessageBox.warning(self, "Hata", f"Tedarikçi '{row[0]}' bulunamadı")
+                continue
+            
+            try:
+                code = int(row[1])
+                price = int(row[2])
+                stock = int(row[3])
+                
+                prestate = PreState(code=code, price=price, stock=stock)
+                
+                sup_prestates[supplier].append(prestate)
+                        
+            except ValueError as e:
+                QMessageBox.warning(self, "Hata", f"Geçersiz veri formatı: {str(e)}")
+                continue
+            except Exception as e:
+                QMessageBox.warning(self, "Hata", f"İşlem hatası: {str(e)}")
+                continue
+            
+        print("sup PRESTATES", sup_prestates)
+            
+        # remote ya da local processor seçeneğine göre işlem yap
         if self.send_type_checkbox.isChecked():
-            QMessageBox.warning(self, "Hata", "Şuanda çevrimiçi işlem mümkün değildir")
+            client = Client(self.config["REMOTE_BASE_URL"])
+            for k,v in sup_prestates.items():
+                if len(v) == 0:
+                    continue
+                
+                successed, failed = client.send(sup_prestates[k],k)
+                successed:List[Product]
+                failed:List[Product]
+                
+                # Table yenile başarılı
+                for product in successed:
+                    for j, row in enumerate(data):
+                        code = int(row[1])     
+                        product_code = str(product.urun_kodu)[2:]
+                        if str(product_code) == str(code):
+                            self.table_widget.setItem(j,4,QTableWidgetItem(str(True)))
+                            break
+                # Table yenile başarısız
+                for product in failed:
+                    for j, row in enumerate(data):
+                        code = int(row[1])     
+                        product_code = str(product.urun_kodu)[2:]
+                        if str(product_code) == str(code):
+                            self.table_widget.setItem(j,4,QTableWidgetItem(str(False)))
+                            break
+                        
+                saver = SaverLikeIkasTemplate()
+                                
+                # statement
+                static_values = {
+                    "Satış Kanalı:nurcocuk" :"VISIBLE",
+                    "Tip" : "PHYSICAL"}
+
+                # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
+                saver.fill(successed,static_values,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
+                
+                # Başarısız olanları ikas frame'inde doldur ve kaydet
+                saver.fill(failed,static_values,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
+
+            QMessageBox.information(self, "Başarılı", f"Ürünler başarıyla işlendi")
+            # QMessageBox.warning(self, "Hata", "Şuanda çevrimiçi işlem mümkün değildir")
         else:
             processer = Processer()
-            
-            # tedarikçi kategorilerne göre ayıkla ve dictte tut
-            sup_prestates = {}
-            for i in Suppliers:
-                sup_prestates.update({i : []})
-                
-            for row in data:
-                
-                for elem in Suppliers:
-                    if elem.value["prefix"] == row[0]:
-                        supplier = elem
-                        break
-                
-                if supplier is None:
-                    QMessageBox.warning(self, "Hata", f"Tedarikçi '{row[0]}' bulunamadı")
-                    continue
-                
-                try:
-                    code = int(row[1])
-                    price = int(row[2])
-                    stock = int(row[3])
-                    
-                    prestate = PreState(code=code, price=price, stock=stock)
-                    
-                    sup_prestates[supplier].append(prestate)
-                            
-                except ValueError as e:
-                    QMessageBox.warning(self, "Hata", f"Geçersiz veri formatı: {str(e)}")
-                    continue
-                except Exception as e:
-                    QMessageBox.warning(self, "Hata", f"İşlem hatası: {str(e)}")
-                    continue
-                
-            print(
-                "sup PRESTATES", sup_prestates
-            )
-            
+ 
             for k,v in sup_prestates.items():
                 if len(v) == 0:
                     continue
