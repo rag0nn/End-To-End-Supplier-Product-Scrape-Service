@@ -2,12 +2,11 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget,QTableWidgetItem,
     QComboBox, QPushButton,QLineEdit,QSpinBox,QCheckBox,
-    QMessageBox
+    QMessageBox,QProgressBar
 )
-from PyQt6.QtGui import QFont, QPalette, QColor
-from PyQt6.QtCore import Qt
-from enum import Enum
-from typing import Dict, List
+
+from PyQt6.QtGui import QFont
+from typing import Dict, List, Callable
 import sys
 import os
 import logging
@@ -18,6 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from supplier_scrape_core.processer import Processer
 from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.structers.product import PreState, Suppliers, Product
+from supplier_scrape_core.config.config import STATIC_VALUES
 from backend.client import Client
 
 
@@ -45,9 +45,6 @@ handler.setFormatter(ColorFormatter(
 ))
 logger.addHandler(handler)
 
-
-
-        
 class MainWindow(QMainWindow):
     
     def __init__(self):
@@ -206,6 +203,11 @@ class MainWindow(QMainWindow):
         self.send_type_checkbox = QCheckBox("Çevrimiçi Gönderim")
         layout.addWidget(self.send_type_checkbox)
         
+        # progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        
         # send buton
         self.send_button = QPushButton("Gönder")
         self.send_button.clicked.connect(self.send)
@@ -221,7 +223,6 @@ class MainWindow(QMainWindow):
         if self.table_widget.rowCount() == 0:
             QMessageBox.warning(self, "Hata", "Tabloya herhangi bir öğe eklenmemiş")
             return
-
         # tedarikçi kategorilerine göre ayıkla, sub_prestates sözlüğünde tut
         data = []
         for row in range(self.table_widget.rowCount()):
@@ -262,7 +263,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Hata", f"İşlem hatası: {str(e)}")
                 continue
             
-        print("sup PRESTATES", sup_prestates)
+        print("SUP PRESTATES", sup_prestates)
             
         # remote ya da local processor seçeneğine göre işlem yap
         if self.send_type_checkbox.isChecked():
@@ -274,7 +275,9 @@ class MainWindow(QMainWindow):
                 successed, failed = client.send(sup_prestates[k],k)
                 successed:List[Product]
                 failed:List[Product]
-                
+                if not successed:
+                    QMessageBox.information(self, "Başarılı", f"Veri çekmede bir problem meydana geldi.")   
+                    break
                 # Table yenile başarılı
                 for product in successed:
                     for j, row in enumerate(data):
@@ -293,20 +296,14 @@ class MainWindow(QMainWindow):
                             break
                         
                 saver = SaverLikeIkasTemplate()
-                                
-                # statement
-                static_values = {
-                    "Satış Kanalı:nurcocuk" :"VISIBLE",
-                    "Tip" : "PHYSICAL"}
 
                 # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
-                saver.fill(successed,static_values,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
+                saver.fill(successed,STATIC_VALUES,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
                 
                 # Başarısız olanları ikas frame'inde doldur ve kaydet
-                saver.fill(failed,static_values,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
+                saver.fill(failed,STATIC_VALUES,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
 
             QMessageBox.information(self, "Başarılı", f"Ürünler başarıyla işlendi")
-            # QMessageBox.warning(self, "Hata", "Şuanda çevrimiçi işlem mümkün değildir")
         else:
             processer = Processer()
  
@@ -337,16 +334,12 @@ class MainWindow(QMainWindow):
                         
                 saver = SaverLikeIkasTemplate()
                                 
-                # statement
-                static_values = {
-                    "Satış Kanalı:nurcocuk" :"VISIBLE",
-                    "Tip" : "PHYSICAL"}
 
                 # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
-                saver.fill(products,static_values,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
+                saver.fill(products,STATIC_VALUES,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
                 
                 # Başarısız olanları ikas frame'inde doldur ve kaydet
-                saver.fill(failed_producuts,static_values,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
+                saver.fill(failed_producuts,STATIC_VALUES,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
 
             QMessageBox.information(self, "Başarılı", f"Ürünler başarıyla işlendi")
 
