@@ -73,11 +73,11 @@ class SaverLikeIkasTemplate:
             
     def convert_io_output(self,*filled_frames: List[pd.DataFrame]):
         output = io.BytesIO()
-
+        df = pd.concat(filled_frames, ignore_index=True)
+        for i in ["İsim","Kategoriler"]:
+            df[i] = df[i].fillna("unknown")
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            for filled_frame in filled_frames:
-                filled_frame:pd.DataFrame
-                filled_frame.to_excel(writer, index=False)
+                df.to_excel(writer, index=False)
         output.seek(0)
         return output
 

@@ -10,7 +10,6 @@ import requests
 import logging
 import json
 
-
 class Client:
     
     def __init__(self, base_url):
@@ -220,23 +219,26 @@ def test_client():
     client = Client(server_url)
     
     save_path = f"{os.path.dirname(__file__)}/test_output"
-    
+    for f in os.listdir(save_path):
+        os.remove(save_path + "/" + f)
+    logging.info("Cleared test_output folder")    
+         
     # json response
-    # for k,v in test_prestates.items():
-    #     success, failed = client.send(v,k,save_path)
-    #     if success:
-    #         print(f"SUCCESS {len(success)} / FAILED {len(failed)}")
-    #         print(success[0])
-    #     else:
-    #         print(f"--> {success}")
-    
-    # # excel response
     for k,v in test_prestates.items():
-        success, failed = client.send_via_direct_excel(v,k,save_path)
+        success, failed = client.send(v,k,save_path)
         if success:
             print(f"SUCCESS {len(success)} / FAILED {len(failed)}")
             print(success[0])
         else:
             print(f"--> {success}")
+    
+    # # excel response
+    # for k,v in test_prestates.items():
+    #     success, failed = client.send_via_direct_excel(v,k,save_path)
+    #     if success:
+    #         print(f"SUCCESS {len(success)} / FAILED {len(failed)}")
+    #         print(success[0])
+    #     else:
+    #         print(f"--> {success}")
 if __name__ == "__main__":
     test_client()
