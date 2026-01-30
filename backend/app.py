@@ -1,9 +1,11 @@
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
 from typing import List
 from supplier_scrape_core.processer import Processer
 from supplier_scrape_core.structers.product import Suppliers,PreState
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from interfaces import create_response
 
 # app initialize
@@ -87,6 +89,24 @@ def fetch_products():
         logging.info(f"Products will fetch using {supplier.name}")
         prodducts_successed, products_failed = processer.get_with_code(supplier,*prestates)
         
+        #eğer excel olarak isteniyorsa öyle döndür
+        export_excel = request.args.get("excel", "false").lower() == "true"
+        if export_excel:
+            from supplier_scrape_core.savers import SaverLikeIkasTemplate
+            from supplier_scrape_core.config.config import STATIC_VALUES
+
+            saver = SaverLikeIkasTemplate()
+            filled_frame_successed = saver.fill(prodducts_successed,STATIC_VALUES)
+            filled_frame_failed = saver.fill(products_failed,STATIC_VALUES)
+            output = saver.convert_io_output(filled_frame_successed,filled_frame_failed)
+            
+            return send_file(
+                output,
+                as_attachment=True,
+                download_name="products.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
         # response oluştur
         response = create_response(prodducts_successed, products_failed)
         

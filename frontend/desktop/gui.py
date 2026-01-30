@@ -298,10 +298,14 @@ class MainWindow(QMainWindow):
                 saver = SaverLikeIkasTemplate()
 
                 # Başarıyla çekilmiş olanları ikas frame'ine doldur ve kaydet
-                saver.fill(successed,STATIC_VALUES,f"./frontend/desktop/output/success_{k.value["name"]}.xlsx")
+                out_path = f"./frontend/desktop/output/success_{k.value["name"]}.xlsx"
+                filled_frame = saver.fill(successed,STATIC_VALUES)
+                saver.write(filled_frame,out_path)
                 
                 # Başarısız olanları ikas frame'inde doldur ve kaydet
-                saver.fill(failed,STATIC_VALUES,f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx")
+                out_path = f"./frontend/desktop/output/failed_{k.value["name"]}.xlsx"
+                filled_frame = saver.fill(failed,STATIC_VALUES)
+                saver.write(filled_frame,out_path)
 
             QMessageBox.information(self, "Başarılı", f"Ürünler başarıyla işlendi")
         else:

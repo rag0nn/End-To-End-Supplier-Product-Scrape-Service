@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 from .structers.product import Product
 import os
+import io
 
 class SaverLikeIkasTemplate:
     
@@ -36,7 +37,7 @@ class SaverLikeIkasTemplate:
             "marka" : "Tedarikçi"
             }
     
-    def fill(self, products: List[Product], static_values = None,dist_path = "./output.xlsx"):
+    def fill(self, products: List[Product], static_values = None):
 
         rows = []
 
@@ -61,11 +62,22 @@ class SaverLikeIkasTemplate:
             self.filled_frame[k] = v
     
         logging.debug(self.filled_frame)
+        return self.filled_frame
         
+    def write(self,filled_frame:pd.DataFrame, dist_path = "./output.xlsx"):
         try:
-            self.filled_frame.to_excel(dist_path, index=False)
+            filled_frame.to_excel(dist_path, index=False)
             logging.info(f"Saved To: {dist_path}")
         except Exception as e:
             logging.error(f"Save Fail To: {dist_path} \n{e}")
             
+    def convert_io_output(self,*filled_frames: List[pd.DataFrame]):
+        output = io.BytesIO()
+
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            for filled_frame in filled_frames:
+                filled_frame:pd.DataFrame
+                filled_frame.to_excel(writer, index=False)
+        output.seek(0)
+        return output
 

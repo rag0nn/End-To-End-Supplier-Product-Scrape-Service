@@ -1,8 +1,10 @@
 import requests
 import json
 import time
-import os
 from typing import Dict, List
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from supplier_scrape_core.structers.product import PreState,Suppliers,Product
 from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.config.config import STATIC_VALUES

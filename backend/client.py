@@ -1,12 +1,14 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from supplier_scrape_core.structers.product import PreState,Suppliers,Product
 from supplier_scrape_core.savers import SaverLikeIkasTemplate
 from supplier_scrape_core.config.config import STATIC_VALUES
-from .interfaces import create_payload
+from interfaces import create_payload
 from typing import List, Optional, Tuple
 import requests
 import logging
 import json
-import os 
 
 
 class Client:
@@ -77,6 +79,7 @@ class Client:
 
             logging.info(f"Payload gönderiliyor: {json.dumps(payload, indent=2)}")
             response = requests.post(
+                # f"{self.base_url}/fetch-products",
                 f"{self.base_url}/fetch-products",
                 json = payload,
                 timeout = 30
@@ -105,17 +108,20 @@ class Client:
             if save_path is not None:
 
                 try:
-                    print(f"[{supplier.name}] Başarılı ürünler kaydediliyor...")
+                    logging.info(f"[{supplier.name}] Başarılı ürünler kaydediliyor...")
                     # save successed outputs
                     saver = SaverLikeIkasTemplate()
                     output_dst_path = f"{save_path}/{supplier.name}_successed.xlsx"
-                    saver.fill(successed_products,STATIC_VALUES,output_dst_path)
+                    filled_frame = saver.fill(successed_products,STATIC_VALUES)
+                    saver.write(filled_frame,output_dst_path)
                     
-                    print(f"[{supplier.name}] Başarısız ürünler kaydediliyor...")
                     # save failed outputs
+                    logging.info(f"[{supplier.name}] Başarısız ürünler kaydediliyor...")
                     saver = SaverLikeIkasTemplate()
                     output_dst_path = f"{save_path}/{supplier.name}_failed.xlsx"
-                    saver.fill(failed_products,STATIC_VALUES,output_dst_path)
+                    filled_frame = saver.fill(failed_products,STATIC_VALUES)
+                    saver.write(filled_frame,output_dst_path)
+                    
                 except Exception as e:
                     print(f"Kaydetme sırasında bir sorun çıktı \n{e}")
             return (successed_products,failed_products)
@@ -129,7 +135,62 @@ class Client:
             logging.error(f"Process hatası: {str(e)}")
             return False,False
         
+    def send_via_direct_excel(self,prestates: List[PreState],supplier:Suppliers, save_path : Optional[str] = None)->Tuple[List[Product],List[Product]]:
+        """
+        Send prestates to the remote product-fetching endpoint, parse the response and optionally save results to Excel files.
+        Parameters
+        ----------
+        prestates : List[PreState]
+            A list of PreState objects to send to the server. Each PreState will be serialized to a dict in the request payload.
+        supplier : Suppliers
+            Supplier enum value; its .value["prefix"] is used in the payload and its .name is used when saving files.
+        save_path : Optional[str]
+            If provided, directory path where two Excel files will be written:
+            - {save_path}/{supplier.name}_successed.xlsx
+            - {save_path}/{supplier.name}_failed.xlsx
+            Saving is performed using SaverLikeIkasTemplate().fill(..., STATIC_VALUES, path).
+        Returns
+        -------
+        Excel File
+        """
+        health_status = self._health_check()
+        if not health_status:
+            logging.error("Server Health Status False")
+            return False,False
+        try:
+            payload = create_payload(prestates,supplier)
 
+            logging.info(f"Payload gönderiliyor: {json.dumps(payload, indent=2)}")
+            response = requests.post(
+                f"{self.base_url}/fetch-products?excel=true",
+                json=payload,
+                timeout=30
+            )
+
+            logging.info(f"Response status: {response.status_code}")
+
+            if response.status_code != 200:
+                logging.error(f"HTTP Error: {response.status_code}")
+                return False, False
+
+            if not save_path:
+                logging.error("Excel response geldi ama save_path verilmedi")
+                return False, False
+
+            output_path = f"{save_path}/{supplier.name}_products_mixed.xlsx"
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+
+            logging.info(f"Excel kaydedildi: {output_path}")
+
+            # Excel döndüyse Product listesi dönemezsin
+            return [], []
+
+        except Exception as e:
+            logging.error(f"Send via direkt excel method fail {e}")
+            return False,False
+
+                    
 
 def test_client():
     logging.basicConfig(
@@ -159,14 +220,23 @@ def test_client():
     client = Client(server_url)
     
     save_path = f"{os.path.dirname(__file__)}/test_output"
+    
+    # json response
+    # for k,v in test_prestates.items():
+    #     success, failed = client.send(v,k,save_path)
+    #     if success:
+    #         print(f"SUCCESS {len(success)} / FAILED {len(failed)}")
+    #         print(success[0])
+    #     else:
+    #         print(f"--> {success}")
+    
+    # # excel response
     for k,v in test_prestates.items():
-        success, failed = client.send(v,k,save_path)
+        success, failed = client.send_via_direct_excel(v,k,save_path)
         if success:
             print(f"SUCCESS {len(success)} / FAILED {len(failed)}")
             print(success[0])
         else:
             print(f"--> {success}")
-    
-
 if __name__ == "__main__":
     test_client()
