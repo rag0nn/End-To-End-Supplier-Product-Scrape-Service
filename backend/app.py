@@ -2,11 +2,10 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
-from typing import List
+from typing import List, Dict
 from supplier_scrape_core.processer import Processer
-from supplier_scrape_core.structers.product import Suppliers,PreState
+from supplier_scrape_core.structers.product import Suppliers,PreState,Product
 from flask import Flask, request, jsonify, send_file
-from interfaces import create_response
 
 # app initialize
 app = Flask(__name__)
@@ -18,7 +17,23 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
+def create_response(successed:List[Product], failed:List[Product])->Dict:
+    # ürünleri serialize et
+    serialized_successed = [product.serialize() for product in successed]
+    serialized_failed = [product.serialize() for product in failed]
+    
+    # response
+    return {
+        "successed" : {
+            "count" : len(serialized_successed),
+            "products" : serialized_successed
+        },
+        "failed" : {
+            "count" : len(serialized_failed),
+            "products" : serialized_failed
+        }
+    }
+    
 def create_prestate_objects_from_list(prestate_data: List[dict]) -> List[PreState]:
     prestates = []
     for item in prestate_data:
