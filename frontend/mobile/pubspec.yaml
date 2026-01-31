@@ -49,6 +49,12 @@ dependencies:
   
   # Local storage for settings
   shared_preferences: ^2.2.2
+  
+  # Open files
+  open_filex: ^4.3.2
+  
+  # Launch URLs (files, web)
+  url_launcher: ^6.2.4
 
 dev_dependencies:
   flutter_test:

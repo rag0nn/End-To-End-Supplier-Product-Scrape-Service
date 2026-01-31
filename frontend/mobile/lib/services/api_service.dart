@@ -1,17 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/models.dart';
-
-/// API Response
-class ApiResponse {
-  final List<Product> successedProducts;
-  final List<Product> failedProducts;
-
-  ApiResponse({
-    required this.successedProducts,
-    required this.failedProducts,
-  });
-}
 
 /// Remote sunucu ile iletişim servisi
 class ApiService {
@@ -35,7 +25,7 @@ class ApiService {
   }
 
   /// Ürünleri sunucudan çek
-  Future<ApiResponse?> fetchProducts({
+  Future<Uint8List?> fetchProducts({
     required List<PreState> prestates,
     required Supplier supplier,
   }) async {
@@ -53,38 +43,14 @@ class ApiService {
 
       final response = await _client
           .post(
-            Uri.parse('$baseUrl/fetch-products'),
+            Uri.parse('$baseUrl/fetch-products?excel=true'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        final successedProducts = <Product>[];
-        final failedProducts = <Product>[];
-
-        // Başarılı ürünleri parse et
-        final successedData = data['successed'];
-        if (successedData != null && successedData['products'] != null) {
-          for (var item in successedData['products']) {
-            successedProducts.add(Product.fromSerialized(item));
-          }
-        }
-
-        // Başarısız ürünleri parse et
-        final failedData = data['failed'];
-        if (failedData != null && failedData['products'] != null) {
-          for (var item in failedData['products']) {
-            failedProducts.add(Product.fromSerialized(item));
-          }
-        }
-
-        return ApiResponse(
-          successedProducts: successedProducts,
-          failedProducts: failedProducts,
-        );
+        return response.bodyBytes;
       }
 
       return null;

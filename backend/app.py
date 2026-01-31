@@ -14,7 +14,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 16 * 1024 # 16 MB max request size
 # # logs
 # logging = logging.getlogging(__name__)
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 def create_response(successed:List[Product], failed:List[Product])->Dict:

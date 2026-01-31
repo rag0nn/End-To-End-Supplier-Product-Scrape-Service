@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:open_filex/open_filex.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
-import '../services/excel_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,22 +18,21 @@ class _HomeScreenState extends State<HomeScreen> {
   // Form controllers
   final _productCodeController = TextEditingController();
   final _priceController = TextEditingController();
-  
+
   // State
   Supplier _selectedSupplier = Supplier.balgunes;
   int _quantity = 1;
   final List<ProductRow> _productRows = [];
   bool _isLoading = false;
   String? _lastExcelPath;
-  
+
   // Settings
   static const String _remoteUrlKey = 'remote_url';
   static const String _defaultUrl = 'http://192.168.1.20:5000';
   String _remoteUrl = _defaultUrl;
-  
+
   // Services
   late ApiService _apiService;
-  final ExcelService _excelService = ExcelService();
 
   @override
   void initState() {
@@ -98,6 +99,35 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Kaydedilen son dosya konumunu aç
+  Future<void> _openLastExcelLocation() async {
+    final path = _lastExcelPath;
+    if (path == null) {
+      _showError('Henüz kaydedilmiş bir dosya yok');
+      return;
+    }
+
+    try {
+      if (Platform.isWindows) {
+        // Windows: Explorer ile dosyayı seçili olarak aç
+        // Not: 'explorer.exe' ve '/select,' argümanı dosyanın olduğu klasörü açar ve dosyayı seçer
+        await Process.run('explorer.exe', ['/select,', path]);
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        // Mobile: Dosyayı direkt aç (Klasör açmak genelde desteklenmez veya kullanıcı dostu değildir)
+        final result = await OpenFilex.open(path);
+        if (result.type != ResultType.done) {
+          _showError('Dosya açılamadı: ${result.message}');
+        }
+      } else {
+        _showError(
+          'Bu özellik şu an sadece Windows ve Mobil platformlarda destekleniyor.',
+        );
+      }
+    } catch (e) {
+      _showError('Konum açılırken hata: $e');
+    }
+  }
+
   /// Tabloya ürün ekle
   void _addProductToTable() {
     // Validasyon
@@ -105,32 +135,38 @@ class _HomeScreenState extends State<HomeScreen> {
     final price = int.tryParse(_priceController.text);
 
     if (productCode == null) {
-      _showError(_productCodeController.text.isEmpty
-          ? 'Ürün kodu mutlaka girilmelidir'
-          : 'Ürün kodu sadece sayı içermelidir');
+      _showError(
+        _productCodeController.text.isEmpty
+            ? 'Ürün kodu mutlaka girilmelidir'
+            : 'Ürün kodu sadece sayı içermelidir',
+      );
       return;
     }
 
     if (price == null) {
-      _showError(_priceController.text.isEmpty
-          ? 'Ürün fiyatı mutlaka girilmelidir'
-          : 'Ürün fiyatı sadece sayı içermelidir');
+      _showError(
+        _priceController.text.isEmpty
+            ? 'Ürün fiyatı mutlaka girilmelidir'
+            : 'Ürün fiyatı sadece sayı içermelidir',
+      );
       return;
     }
 
     setState(() {
-      _productRows.add(ProductRow(
-        supplier: _selectedSupplier,
-        productCode: productCode,
-        price: price,
-        quantity: _quantity,
-      ));
+      _productRows.add(
+        ProductRow(
+          supplier: _selectedSupplier,
+          productCode: productCode,
+          price: price,
+          quantity: _quantity,
+        ),
+      );
     });
 
     // Formu temizle
     _productCodeController.clear();
     _priceController.clear();
-    
+
     // Klavyeyi kapat
     FocusScope.of(context).unfocus();
   }
@@ -162,69 +198,47 @@ class _HomeScreenState extends State<HomeScreen> {
         if (rows.isEmpty) continue;
 
         final prestates = rows.map((r) => r.toPreState()).toList();
-        final response = await _apiService.fetchProducts(
+        final responseBytes = await _apiService.fetchProducts(
           prestates: prestates,
           supplier: supplier,
         );
 
-        if (response == null) {
-          _showError('Sunucuya bağlanılamadı');
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        // Tablo durumunu güncelle - başarılı
-        for (var product in response.successedProducts) {
-          final productCode = product.urunKodu.length > 2
-              ? product.urunKodu.substring(2)
-              : product.urunKodu;
-          for (var row in _productRows) {
-            if (row.productCode.toString() == productCode) {
-              row.success = true;
-              break;
-            }
-          }
-        }
-
-        // Tablo durumunu güncelle - başarısız
-        for (var product in response.failedProducts) {
-          final productCode = product.urunKodu.length > 2
-              ? product.urunKodu.substring(2)
-              : product.urunKodu;
-          for (var row in _productRows) {
-            if (row.productCode.toString() == productCode) {
-              row.success = false;
-              break;
-            }
-          }
-        }
-
-        // Excel'e kaydet
-        if (response.successedProducts.isNotEmpty) {
-          final file = await _excelService.saveProducts(
-            products: response.successedProducts,
-            fileName: 'success_${supplier.displayName}.xlsx',
+        if (responseBytes == null) {
+          _showError(
+            'Sunucuya bağlanılamadı veya hata oluştu (${supplier.displayName})',
           );
-          if (file != null) {
-            _lastExcelPath = file.path;
-            await _excelService.shareFile(file);
-          }
+          // Hata durumunda diğer tedarikçilere devam edebiliriz veya durabiliriz.
+          // Burada devam etmeyelim.
+          continue;
         }
 
-        if (response.failedProducts.isNotEmpty) {
-          final file = await _excelService.saveProducts(
-            products: response.failedProducts,
-            fileName: 'failed_${supplier.displayName}.xlsx',
-          );
-          if (file != null) {
-            _lastExcelPath = file.path;
-            await _excelService.shareFile(file);
-          }
+        // Excel dosyasını kaydet
+        Directory? directory;
+        if (Platform.isAndroid) {
+          directory = await getExternalStorageDirectory();
+        }
+
+        // Android'de external storage başarısız olursa veya diğer platformlarda documents klasörü
+        directory ??= await getApplicationDocumentsDirectory();
+
+        final fileName =
+            'products_${supplier.displayName}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final path = '${directory.path}/$fileName';
+        final file = File(path);
+
+        await file.writeAsBytes(responseBytes);
+        _lastExcelPath = path;
+
+        // Başarılı kabul et ve satırları güncelle
+        for (var row in rows) {
+          row.success = true;
         }
       }
 
       setState(() {});
-      _showSuccess('Ürünler başarıyla işlendi${_lastExcelPath != null ? '\nDosya: $_lastExcelPath' : ''}');
+      _showSuccess(
+        'Ürünler işlem gördü ve dosya kaydedildi.${_lastExcelPath != null ? '\nSon Dosya: $_lastExcelPath' : ''}',
+      );
     } catch (e) {
       _showError('İşlem sırasında hata oluştu: $e');
     } finally {
@@ -265,6 +279,11 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Ayarlar',
             onPressed: _showSettingsDialog,
           ),
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Dosya Konumunu Aç',
+            onPressed: _openLastExcelLocation,
+          ),
         ],
       ),
       body: SafeArea(
@@ -280,14 +299,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Form kartı
                     _buildForm(),
                     const SizedBox(height: 16),
-                    
+
                     // Ürün listesi
                     _buildProductList(),
                   ],
                 ),
               ),
             ),
-            
+
             // Gönder butonu - Altta sabit
             _buildSendButton(),
           ],
@@ -310,7 +329,10 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: const InputDecoration(
                 labelText: 'Tedarikçi Kodu',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
               items: Supplier.values.map((s) {
                 return DropdownMenuItem(
@@ -335,7 +357,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Ürün Kodu',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -348,7 +373,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Fiyat',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -364,7 +392,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Adet kontrolü
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey),
                       borderRadius: BorderRadius.circular(4),
@@ -383,7 +414,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         Text(
                           '$_quantity',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.add_circle_outline),
@@ -478,7 +512,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Kod: ${row.productCode}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
-                subtitle: Text('Fiyat: ${row.price} TL • Adet: ${row.quantity}'),
+                subtitle: Text(
+                  'Fiyat: ${row.price} TL • Adet: ${row.quantity}',
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
